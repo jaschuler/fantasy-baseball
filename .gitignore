@@ -1,0 +1,24 @@
+# Virtual environment
+venv/
+
+# Database
+db/*.duckdb
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# VS Code
+.vscode/
+
+# Data files (raw exports)
+data/raw/
+data/processed/
+
+# Environment variables
+.env
+
+# Mac clutter
+.DS_Store
