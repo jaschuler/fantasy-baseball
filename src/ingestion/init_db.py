@@ -16,9 +16,10 @@ def init_db():
     con = get_connection()
     
     # ── Reference Tables ──────────────────────────────────────────────────────
+    con.execute("CREATE SEQUENCE IF NOT EXISTS seq_teams START 1")
     con.execute("""
         CREATE TABLE IF NOT EXISTS teams (
-            team_id       INTEGER PRIMARY KEY,
+            team_id  INTEGER PRIMARY KEY DEFAULT nextval('seq_teams'),
             season        INTEGER,
             team_name     VARCHAR,
             manager_name  VARCHAR,
@@ -27,10 +28,11 @@ def init_db():
             league_theme  VARCHAR
         )
     """)
-
+    
+    con.execute("CREATE SEQUENCE IF NOT EXISTS seq_periods START 1")
     con.execute("""
         CREATE TABLE IF NOT EXISTS periods (
-            period_id    INTEGER PRIMARY KEY,
+            period_id    INTEGER PRIMARY KEY DEFAULT nextval('seq_periods'),
             season       INTEGER,
             period_num   INTEGER,
             start_date   DATE,
@@ -40,9 +42,10 @@ def init_db():
         )
     """)
 
+    con.execute("CREATE SEQUENCE IF NOT EXISTS seq_cats START 1")
     con.execute("""
         CREATE TABLE IF NOT EXISTS scoring_categories (
-            cat_id       INTEGER PRIMARY KEY,
+            cat_id       INTEGER PRIMARY KEY DEFAULT nextval('seq_cats'),
             cat_code     VARCHAR,
             cat_display  VARCHAR,
             player_type  VARCHAR,
