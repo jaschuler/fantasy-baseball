@@ -14,9 +14,21 @@ def get_connection():
 def init_db():
     """Create all schema tables if they don't already exist."""
     con = get_connection()
-    
-    # ── Reference Tables ──────────────────────────────────────────────────────
+
+    # ── Create Sequences ──────────────────────────────────────────────────────
     con.execute("CREATE SEQUENCE IF NOT EXISTS seq_teams START 1")
+    con.execute("CREATE SEQUENCE IF NOT EXISTS seq_periods START 1")
+    con.execute("CREATE SEQUENCE IF NOT EXISTS seq_cats START 1")
+    con.execute("CREATE SEQUENCE IF NOT EXISTS seq_hitter_score START 1")
+    con.execute("CREATE SEQUENCE IF NOT EXISTS seq_hitter_standard START 1")
+    con.execute("CREATE SEQUENCE IF NOT EXISTS seq_pitcher_score START 1")
+    con.execute("CREATE SEQUENCE IF NOT EXISTS seq_pitcher_standard START 1")
+    con.execute("CREATE SEQUENCE IF NOT EXISTS seq_matchups START 1")
+    con.execute("CREATE SEQUENCE IF NOT EXISTS seq_transactions START 1")
+    con.execute("CREATE SEQUENCE IF NOT EXISTS seq_crosswalk START 1")
+    con.execute("CREATE SEQUENCE IF NOT EXISTS seq_valuations START 1")
+
+    # ── Reference Tables ──────────────────────────────────────────────────────
     con.execute("""
         CREATE TABLE IF NOT EXISTS teams (
             team_id  INTEGER PRIMARY KEY DEFAULT nextval('seq_teams'),
@@ -29,7 +41,6 @@ def init_db():
         )
     """)
     
-    con.execute("CREATE SEQUENCE IF NOT EXISTS seq_periods START 1")
     con.execute("""
         CREATE TABLE IF NOT EXISTS periods (
             period_id    INTEGER PRIMARY KEY DEFAULT nextval('seq_periods'),
@@ -42,7 +53,6 @@ def init_db():
         )
     """)
 
-    con.execute("CREATE SEQUENCE IF NOT EXISTS seq_cats START 1")
     con.execute("""
         CREATE TABLE IF NOT EXISTS scoring_categories (
             cat_id       INTEGER PRIMARY KEY DEFAULT nextval('seq_cats'),
@@ -69,7 +79,7 @@ def init_db():
 
     con.execute("""
         CREATE TABLE IF NOT EXISTS player_name_crosswalk (
-            crosswalk_id     INTEGER PRIMARY KEY,
+            crosswalk_id     INTEGER PRIMARY KEY DEFAULT nextval('seq_crosswalk'),
             cbs_name_raw     VARCHAR,
             player_id        INTEGER REFERENCES players(player_id),
             match_confidence FLOAT,
@@ -81,7 +91,7 @@ def init_db():
     # ── Fact Tables ───────────────────────────────────────────────────────────
     con.execute("""
         CREATE TABLE IF NOT EXISTS hitter_period_stats_standard (
-            id          INTEGER PRIMARY KEY,
+            id          INTEGER PRIMARY KEY DEFAULT nextval('seq_hitter_standard'),
             player_id   INTEGER REFERENCES players(player_id),
             period_id   INTEGER REFERENCES periods(period_id),
             team_id     INTEGER REFERENCES teams(team_id),
@@ -105,7 +115,7 @@ def init_db():
 
     con.execute("""
         CREATE TABLE IF NOT EXISTS hitter_period_stats_scoring (
-            id          INTEGER PRIMARY KEY,
+            id          INTEGER PRIMARY KEY DEFAULT nextval('seq_hitter_score'),
             player_id   INTEGER REFERENCES players(player_id),
             period_id   INTEGER REFERENCES periods(period_id),
             team_id     INTEGER REFERENCES teams(team_id),
@@ -121,7 +131,7 @@ def init_db():
 
     con.execute("""
         CREATE TABLE IF NOT EXISTS pitcher_period_stats_standard (
-            id          INTEGER PRIMARY KEY,
+            id          INTEGER PRIMARY KEY DEFAULT nextval('seq_pitcher_standard'),
             player_id   INTEGER REFERENCES players(player_id),
             period_id   INTEGER REFERENCES periods(period_id),
             team_id     INTEGER REFERENCES teams(team_id),
@@ -146,7 +156,7 @@ def init_db():
 
     con.execute("""
         CREATE TABLE IF NOT EXISTS pitcher_period_stats_scoring (
-            id          INTEGER PRIMARY KEY,
+            id          INTEGER PRIMARY KEY DEFAULT nextval('seq_pitcher_score'),
             player_id   INTEGER REFERENCES players(player_id),
             period_id   INTEGER REFERENCES periods(period_id),
             team_id     INTEGER REFERENCES teams(team_id),
@@ -162,7 +172,7 @@ def init_db():
 
     con.execute("""
         CREATE TABLE IF NOT EXISTS matchups (
-            matchup_id    INTEGER PRIMARY KEY,
+            matchup_id    INTEGER PRIMARY KEY DEFAULT nextval('seq_matchups'),
             period_id     INTEGER REFERENCES periods(period_id),
             team1_id      INTEGER REFERENCES teams(team_id),
             team2_id      INTEGER REFERENCES teams(team_id),
@@ -178,7 +188,7 @@ def init_db():
 
     con.execute("""
         CREATE TABLE IF NOT EXISTS transactions (
-            transaction_id   INTEGER PRIMARY KEY,
+            transaction_id   INTEGER PRIMARY KEY DEFAULT nextval('seq_transactions'),
             season           INTEGER,
             transaction_date TIMESTAMP,
             effective_date   DATE,
@@ -192,7 +202,7 @@ def init_db():
 
     con.execute("""
         CREATE TABLE IF NOT EXISTS preseason_valuations (
-            valuation_id      INTEGER PRIMARY KEY,
+            valuation_id      INTEGER PRIMARY KEY DEFAULT nextval('seq_valuations'),
             season            INTEGER,
             player_id         INTEGER REFERENCES players(player_id),
             auction_price_paid FLOAT,
