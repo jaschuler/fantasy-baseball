@@ -99,6 +99,7 @@ def init_db():
             AB          INTEGER,
             R           INTEGER,
             H           INTEGER,
+            singles     INTEGER,
             doubles     INTEGER,
             triples     INTEGER,
             HR          INTEGER,
