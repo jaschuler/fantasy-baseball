@@ -137,7 +137,85 @@ def load_all_hitter_scores(season=2025):
     con.close()
     print(f"\nTotal hitter score rows loaded: {total}")
 
+def load_pitcher_score_period(con, season, period_num):
+    """Load one period of pitcher scoring stats into pitcher_period_stats_scoring."""
+    
+    file_path = RAW_DIR / str(season) / f"p{period_num}_pitch_score.csv"
+    
+    if not file_path.exists():
+        print(f"  WARNING: {file_path.name} not found, skipping.")
+        return 0
+    
+    period_id = get_period_id(con, season, period_num)
+    if not period_id:
+        print(f"  WARNING: period {period_num} not found in db, skipping.")
+        return 0
+    
+    df = pd.read_csv(file_path, skiprows=1)
+    df.columns = ['avail', 'player', 'ERA', 'HRA', 'K', 'QS', 'SV', 'WHIP', 'rank', 'extra']
+    
+    # Drop header artifacts and empty rows
+    df = df[df['avail'].notna()].copy()
+    df = df[df['player'].notna()].copy()
+    df = df[df['ERA'] != 'ERA'].copy()
+    
+    # Convert numeric columns
+    for col in ['ERA', 'HRA', 'K', 'QS', 'SV', 'WHIP']:
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+    
+    rows_loaded = 0
+    
+    for _, row in df.iterrows():
+        name, position, mlb_team = parse_player_info(row['player'])
+        
+        avail = str(row['avail']).strip()
+        if avail.startswith('FA') or avail == 'nan':
+            team_id = None
+        else:
+            team_id = get_team_id(con, season, avail)
+        
+        con.execute("""
+            INSERT INTO pitcher_period_stats_scoring
+                (player_id, period_id, team_id, ERA, HRA, K, QS, SV, WHIP, INNs)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, [
+            None,
+            period_id,
+            team_id,
+            row['ERA'],
+            row['HRA'],
+            row['K'],
+            row['QS'],
+            row['SV'],
+            row['WHIP'],
+            None       # INNs — will come from standard file
+        ])
+        rows_loaded += 1
+    
+    return rows_loaded
+
+
+def load_all_pitcher_scores(season=2025):
+    """Load pitcher scoring stats for all periods in a season."""
+    con = get_connection()
+    
+    con.execute("""
+        DELETE FROM pitcher_period_stats_scoring
+        WHERE period_id IN (
+            SELECT period_id FROM periods WHERE season = ?
+        )
+    """, [season])
+    
+    total = 0
+    for period_num in range(1, 23):
+        rows = load_pitcher_score_period(con, season, period_num)
+        print(f"  Period {period_num:>2}: {rows:>5} rows loaded")
+        total += rows
+
 
 if __name__ == "__main__":
     print("Loading hitter scoring stats for 2025...")
     load_all_hitter_scores(season=2025)
+    
+    print("\nLoading pitcher scoring stats for 2025...")
+    load_all_pitcher_scores(season=2025)

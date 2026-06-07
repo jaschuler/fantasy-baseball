@@ -49,4 +49,22 @@ print(con.execute("""
     GROUP BY 1
 """).df())
 
+print("=== PITCHER SCORE SAMPLE ===")
+print(con.execute("""
+    SELECT 
+        p.period_num,
+        t.last_name_key,
+        h.ERA,
+        h.HRA,
+        h.K,
+        h.QS,
+        h.SV,
+        h.WHIP
+    FROM pitcher_period_stats_scoring h
+    LEFT JOIN periods p ON h.period_id = p.period_id
+    LEFT JOIN teams t ON h.team_id = t.team_id
+    WHERE h.team_id IS NOT NULL
+    AND p.period_num = 1
+""").df().head(10))
+
 # con.close()
