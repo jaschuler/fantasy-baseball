@@ -67,4 +67,26 @@ print(con.execute("""
     AND p.period_num = 1
 """).df().head(10))
 
+
+print("=== MATCHUPS SAMPLE ===")
+print(con.execute("""
+    SELECT 
+        p.period_num,
+        t1.last_name_key  AS team1,
+        m.team1_result,
+        m.team1_cat_w,
+        m.team1_cat_l,
+        m.team1_cat_t,
+        t2.last_name_key  AS team2,
+        m.team2_cat_w,
+        m.team2_cat_l,
+        m.team2_cat_t
+    FROM matchups m
+    JOIN periods p  ON m.period_id  = p.period_id
+    JOIN teams t1   ON m.team1_id   = t1.team_id
+    JOIN teams t2   ON m.team2_id   = t2.team_id
+    WHERE p.period_num = 1
+    ORDER BY p.period_num
+""").df())
+
 # con.close()
