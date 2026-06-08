@@ -211,6 +211,100 @@ def get_pitcher_stats(con, season, period_num=None):
 
     return df
 
+def get_full_season_estimates(con, season, period_num=None):
+    """
+    Combine YTD actuals with Steamer ROS projections.
+    Full season estimate = YTD + Steamer ROS.
+    Rate stats weighted by PA/INNs.
+    Returns hitter and pitcher DataFrames.
+    """
+    # Get YTD actuals
+    hitters_ytd  = get_hitter_stats(con, season, period_num)
+    pitchers_ytd = get_pitcher_stats(con, season, period_num)
+
+    # Get Steamer ROS
+    steamer_h = con.execute("""
+        SELECT * FROM steamer_ros_hitters
+    """).df()
+
+    steamer_p = con.execute("""
+        SELECT * FROM steamer_ros_pitchers
+    """).df()
+
+    # ── Hitters ───────────────────────────────────────────────────────────
+    h = hitters_ytd.merge(
+        steamer_h[['player_id','PA','HR','SB','AVG','OPS','RP','KO']],
+        on='player_id',
+        how='left',
+        suffixes=('_ytd', '_ros')
+    )
+
+    # Counting stats — add directly
+    h['HR_proj'] = h['HR_ytd'].fillna(0) + h['HR_ros'].fillna(0)
+    h['SB_proj'] = h['SB_ytd'].fillna(0) + h['SB_ros'].fillna(0)
+    h['RP_proj'] = h['RP_ytd'].fillna(0) + h['RP_ros'].fillna(0)
+    h['KO_proj'] = h['KO_ytd'].fillna(0) + h['KO_ros'].fillna(0)
+
+    # Rate stats — weighted average by PA
+    pa_ytd = h['PA_ytd'].fillna(0)
+    pa_ros = h['PA_ros'].fillna(0)
+    pa_tot = pa_ytd + pa_ros
+
+    h['AVG_proj'] = (
+        (h['AVG_ytd'].fillna(0) * pa_ytd +
+         h['AVG_ros'].fillna(0) * pa_ros) /
+        pa_tot.replace(0, float('nan'))
+    )
+    h['OPS_proj'] = (
+        (h['OPS_ytd'].fillna(0) * pa_ytd +
+         h['OPS_ros'].fillna(0) * pa_ros) /
+        pa_tot.replace(0, float('nan'))
+    )
+
+    # Rename YTD columns cleanly
+    h = h.rename(columns={
+        'HR_ytd': 'HR', 'SB_ytd': 'SB', 'RP_ytd': 'RP',
+        'KO_ytd': 'KO', 'AVG_ytd': 'AVG', 'OPS_ytd': 'OPS',
+    })
+
+    # ── Pitchers ──────────────────────────────────────────────────────────
+    p = pitchers_ytd.merge(
+        steamer_p[['player_id','INNs','ERA','WHIP','K','QS','SV','HRA']],
+        on='player_id',
+        how='left',
+        suffixes=('_ytd', '_ros')
+    )
+
+    # Counting stats
+    p['K_proj']   = p['K_ytd'].fillna(0)   + p['K_ros'].fillna(0)
+    p['QS_proj']  = p['QS_ytd'].fillna(0)  + p['QS_ros'].fillna(0)
+    p['SV_proj']  = p['SV_ytd'].fillna(0)  + p['SV_ros'].fillna(0)
+    p['HRA_proj'] = p['HRA_ytd'].fillna(0) + p['HRA_ros'].fillna(0)
+
+    # Rate stats weighted by INNs
+    inns_ytd = p['INNs_ytd'].fillna(0)
+    inns_ros = p['INNs_ros'].fillna(0)
+    inns_tot = inns_ytd + inns_ros
+
+    p['ERA_proj'] = (
+        (p['ERA_ytd'].fillna(0) * inns_ytd +
+         p['ERA_ros'].fillna(0) * inns_ros) /
+        inns_tot.replace(0, float('nan'))
+    )
+    p['WHIP_proj'] = (
+        (p['WHIP_ytd'].fillna(0) * inns_ytd +
+         p['WHIP_ros'].fillna(0) * inns_ros) /
+        inns_tot.replace(0, float('nan'))
+    )
+
+    p = p.rename(columns={
+        'K_ytd': 'K', 'QS_ytd': 'QS', 'SV_ytd': 'SV',
+        'HRA_ytd': 'HRA', 'ERA_ytd': 'ERA', 'WHIP_ytd': 'WHIP',
+        'INNs_ytd': 'INNs',
+    })
+
+    return h, p
+
 def calculate_z_scores(df, cats, inverse_cats):
     """
     Calculate z-scores for each scoring category.
@@ -353,62 +447,133 @@ def calculate_dollar_values(df, player_type, z_col='z_total'):
 def run_valuations(season, period_num=None):
     """
     Run full valuation pipeline for a given season and period.
-    If period_num is None, runs YTD cumulative.
-    Returns hitter and pitcher DataFrames with z-scores and dollar values.
+    Produces three dollar value outputs:
+    - YTD: what the player has earned so far
+    - Pace: full season if current pace continues
+    - Projected: YTD actuals + Steamer ROS
     """
     con = get_connection()
 
     period_label = f"Period {period_num}" if period_num else "YTD"
     print(f"\nRunning valuations — {season} {period_label}")
 
-    # ── Hitters ───────────────────────────────────────────────────────────
-    print("  Aggregating hitter stats...")
-    hitters = get_hitter_stats(con, season, period_num)
-    print(f"  Hitter pool: {len(hitters)} players")
+    # ── Get season metadata for pace calculation ───────────────────────────
+    total_season_days = con.execute("""
+        SELECT SUM(num_days) FROM periods
+        WHERE season = ? AND period_type = 'regular'
+    """, [season]).fetchone()[0]
 
-    hitters, h_z_cols = calculate_z_scores(
-        hitters, HIT_SCORING_CATS, INVERSE_CATS
-    )
-    hitters = calculate_dollar_values(hitters, 'hitter')
+    if period_num:
+        days_played = con.execute("""
+            SELECT SUM(num_days) FROM periods
+            WHERE season = ? AND period_num <= ? AND period_type = 'regular'
+        """, [season, period_num]).fetchone()[0]
+    else:
+        max_period = con.execute("""
+            SELECT MAX(period_num) FROM periods
+            WHERE season = ? AND period_type = 'regular'
+        """, [season]).fetchone()[0]
+        days_played = con.execute("""
+            SELECT SUM(num_days) FROM periods
+            WHERE season = ? AND period_num <= ? AND period_type = 'regular'
+        """, [season, max_period]).fetchone()[0]
 
-    # ── Pitchers ──────────────────────────────────────────────────────────
-    print("  Aggregating pitcher stats...")
-    pitchers = get_pitcher_stats(con, season, period_num)
-    print(f"  Pitcher pool: {len(pitchers)} players")
+    pace_factor = total_season_days / days_played if days_played else 1.0
+    print(f"  Days played: {days_played} / {total_season_days} — pace factor: {pace_factor:.3f}")
 
-    pitchers, p_z_cols = calculate_z_scores(
-        pitchers, PITCH_SCORING_CATS, INVERSE_CATS
-    )
-    pitchers = calculate_dollar_values(pitchers, 'pitcher')
+    # ── YTD stats ─────────────────────────────────────────────────────────
+    print("  Aggregating YTD stats...")
+    hitters_ytd  = get_hitter_stats(con, season, period_num)
+    pitchers_ytd = get_pitcher_stats(con, season, period_num)
+    print(f"  Hitter pool: {len(hitters_ytd)} | Pitcher pool: {len(pitchers_ytd)}")
+
+    # ── Pace projections ──────────────────────────────────────────────────
+    hitters_pace  = hitters_ytd.copy()
+    pitchers_pace = pitchers_ytd.copy()
+
+    for cat in ['HR', 'SB', 'RP', 'KO']:
+        hitters_pace[cat] = hitters_pace[cat] * pace_factor
+    for cat in ['K', 'QS', 'SV', 'HRA']:
+        pitchers_pace[cat] = pitchers_pace[cat] * pace_factor
+
+    # ── Steamer projected ─────────────────────────────────────────────────
+    print("  Blending with Steamer ROS...")
+    hitters_proj, pitchers_proj = get_full_season_estimates(con, season, period_num)
+
+    # Use projected columns for z-score calculation
+    for cat in ['HR', 'SB', 'RP', 'KO']:
+        hitters_proj[cat] = hitters_proj[f'{cat}_proj']
+    for cat in ['K', 'QS', 'SV', 'HRA']:
+        pitchers_proj[cat] = pitchers_proj[f'{cat}_proj']
+    hitters_proj['AVG'] = hitters_proj['AVG_proj']
+    hitters_proj['OPS'] = hitters_proj['OPS_proj']
+    pitchers_proj['ERA']  = pitchers_proj['ERA_proj']
+    pitchers_proj['WHIP'] = pitchers_proj['WHIP_proj']
+
+    # ── Z-scores and dollar values ────────────────────────────────────────
+    hitters_ytd,  h_z = calculate_z_scores(hitters_ytd,  HIT_SCORING_CATS, INVERSE_CATS)
+    hitters_pace, _   = calculate_z_scores(hitters_pace, HIT_SCORING_CATS, INVERSE_CATS)
+    hitters_proj, _   = calculate_z_scores(hitters_proj, HIT_SCORING_CATS, INVERSE_CATS)
+
+    pitchers_ytd,  p_z = calculate_z_scores(pitchers_ytd,  PITCH_SCORING_CATS, INVERSE_CATS)
+    pitchers_pace, _   = calculate_z_scores(pitchers_pace, PITCH_SCORING_CATS, INVERSE_CATS)
+    pitchers_proj, _   = calculate_z_scores(pitchers_proj, PITCH_SCORING_CATS, INVERSE_CATS)
+
+    hitters_ytd   = calculate_dollar_values(hitters_ytd,   'hitter')
+    hitters_pace  = calculate_dollar_values(hitters_pace,  'hitter')
+    hitters_proj  = calculate_dollar_values(hitters_proj,  'hitter')
+
+    pitchers_ytd  = calculate_dollar_values(pitchers_ytd,  'pitcher')
+    pitchers_pace = calculate_dollar_values(pitchers_pace, 'pitcher')
+    pitchers_proj = calculate_dollar_values(pitchers_proj, 'pitcher')
 
     con.close()
 
-    # ── Summary ───────────────────────────────────────────────────────────
-    print(f"\n  Top 10 Hitters ({period_label}):")
-    h_display = hitters.sort_values('dollar_value', ascending=False)[
-        ['name_full', 'primary_pos', 'PA', 'HR', 'SB', 'AVG', 'OPS',
-         'RP', 'KO', 'z_AVG', 'z_HR', 'z_KO', 'z_OPS', 'z_RP', 'z_SB',
-         'z_total', 'dollar_value']
-    ].head(10)
+    # ── Summary output ────────────────────────────────────────────────────
     pd.set_option('display.max_columns', None)
     pd.set_option('display.width', 200)
     pd.set_option('display.float_format', '{:.2f}'.format)
-    print(h_display.to_string(index=False))
 
-    print(f"\n  Top 10 Pitchers ({period_label}):")
-    p_display = pitchers.sort_values('dollar_value', ascending=False)[
-        ['name_full', 'pitcher_role', 'INNs', 'ERA', 'WHIP', 'HRA', 'K',
-         'QS', 'SV', 'z_ERA', 'z_WHIP', 'z_HRA', 'z_K', 'z_QS', 'z_SV',
-         'z_total', 'dollar_value']
-    ].head(10)
-    print(p_display.to_string(index=False))
+    print(f"\n  === TOP 10 HITTERS — YTD ===")
+    print(hitters_ytd.sort_values('dollar_value', ascending=False)[
+        ['name_full', 'primary_pos', 'PA', 'HR', 'SB', 'AVG',
+         'OPS', 'RP', 'KO', 'z_total', 'dollar_value']
+    ].head(10).to_string(index=False))
 
-    return hitters, pitchers
+    print(f"\n  === TOP 10 HITTERS — PACE ===")
+    print(hitters_pace.sort_values('dollar_value', ascending=False)[
+        ['name_full', 'primary_pos', 'HR', 'SB', 'AVG',
+         'OPS', 'RP', 'KO', 'z_total', 'dollar_value']
+    ].head(10).to_string(index=False))
+
+    print(f"\n  === TOP 10 HITTERS — PROJECTED (YTD + STEAMER) ===")
+    print(hitters_proj.sort_values('dollar_value', ascending=False)[
+        ['name_full', 'primary_pos', 'HR', 'SB', 'AVG_proj',
+         'OPS_proj', 'RP_proj', 'KO_proj', 'z_total', 'dollar_value']
+    ].head(10).to_string(index=False))
+
+    print(f"\n  === TOP 10 PITCHERS — YTD ===")
+    print(pitchers_ytd.sort_values('dollar_value', ascending=False)[
+        ['name_full', 'pitcher_role', 'INNs', 'ERA', 'WHIP',
+         'K', 'QS', 'SV', 'HRA', 'z_total', 'dollar_value']
+    ].head(10).to_string(index=False))
+
+    print(f"\n  === TOP 10 PITCHERS — PACE ===")
+    print(pitchers_pace.sort_values('dollar_value', ascending=False)[
+        ['name_full', 'pitcher_role', 'ERA', 'WHIP',
+         'K', 'QS', 'SV', 'HRA', 'z_total', 'dollar_value']
+    ].head(10).to_string(index=False))
+
+    print(f"\n  === TOP 10 PITCHERS — PROJECTED (YTD + STEAMER) ===")
+    print(pitchers_proj.sort_values('dollar_value', ascending=False)[
+        ['name_full', 'pitcher_role', 'ERA_proj', 'WHIP_proj',
+         'K_proj', 'QS_proj', 'SV_proj', 'HRA_proj', 'z_total', 'dollar_value']
+    ].head(10).to_string(index=False))
+
+    return hitters_ytd, hitters_pace, hitters_proj, pitchers_ytd, pitchers_pace, pitchers_proj
 
 
 if __name__ == "__main__":
     import sys
     season = int(sys.argv[1]) if len(sys.argv) > 1 else 2026
-
-    # Run YTD valuations
-    hitters, pitchers = run_valuations(season=season)
+    run_valuations(season=season)
