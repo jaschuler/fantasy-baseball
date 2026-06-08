@@ -59,12 +59,13 @@ def get_team_id(con, season, last_name_key):
 
 
 def load_hitter_score_period(con, season, period_num):
-    """Load one period of hitter scoring stats into hitter_period_stats_scoring."""
-    
+    # Try both naming conventions
     file_path = RAW_DIR / str(season) / f"p{period_num}_hit_score.csv"
+    if not file_path.exists():
+        file_path = RAW_DIR / str(season) / f"p{period_num}_batter_scoring.csv"
     
     if not file_path.exists():
-        print(f"  WARNING: {file_path.name} not found, skipping.")
+        print(f"  WARNING: no hitter score file found for period {period_num}, skipping.")
         return 0
     
     period_id = get_period_id(con, season, period_num)
@@ -120,31 +121,36 @@ def load_hitter_score_period(con, season, period_num):
 def load_all_hitter_scores(season=2025):
     """Load hitter scoring stats for all periods in a season."""
     con = get_connection()
-    
-    # Clear existing data for this season to avoid duplicates
+
     con.execute("""
         DELETE FROM hitter_period_stats_scoring
         WHERE period_id IN (
             SELECT period_id FROM periods WHERE season = ?
         )
     """, [season])
-    
+
+    max_period = con.execute("""
+        SELECT MAX(period_num) FROM periods WHERE season = ?
+    """, [season]).fetchone()[0]
+
     total = 0
-    for period_num in range(1, 23):
+    for period_num in range(1, max_period + 1):
         rows = load_hitter_score_period(con, season, period_num)
         print(f"  Period {period_num:>2}: {rows:>5} rows loaded")
         total += rows
-    
+
+    con.commit()
     con.close()
     print(f"\nTotal hitter score rows loaded: {total}")
 
 def load_pitcher_score_period(con, season, period_num):
-    """Load one period of pitcher scoring stats into pitcher_period_stats_scoring."""
-    
+    # Try both naming conventions
     file_path = RAW_DIR / str(season) / f"p{period_num}_pitch_score.csv"
+    if not file_path.exists():
+        file_path = RAW_DIR / str(season) / f"p{period_num}_pitcher_scoring.csv"
     
     if not file_path.exists():
-        print(f"  WARNING: {file_path.name} not found, skipping.")
+        print(f"  WARNING: no pitcher score file found for period {period_num}, skipping.")
         return 0
     
     period_id = get_period_id(con, season, period_num)
@@ -200,19 +206,27 @@ def load_pitcher_score_period(con, season, period_num):
 def load_all_pitcher_scores(season=2025):
     """Load pitcher scoring stats for all periods in a season."""
     con = get_connection()
-    
+
     con.execute("""
         DELETE FROM pitcher_period_stats_scoring
         WHERE period_id IN (
             SELECT period_id FROM periods WHERE season = ?
         )
     """, [season])
-    
+
+    max_period = con.execute("""
+        SELECT MAX(period_num) FROM periods WHERE season = ?
+    """, [season]).fetchone()[0]
+
     total = 0
-    for period_num in range(1, 23):
+    for period_num in range(1, max_period + 1):
         rows = load_pitcher_score_period(con, season, period_num)
         print(f"  Period {period_num:>2}: {rows:>5} rows loaded")
         total += rows
+
+    con.commit()
+    con.close()
+    print(f"\nTotal pitcher score rows loaded: {total}")
 
 
 def load_hitter_standard_period(con, season, period_num):
@@ -230,11 +244,14 @@ def load_hitter_standard_period(con, season, period_num):
         return 0
     
     df = pd.read_csv(file_path, skiprows=1)
-    df.columns = [
+    base_cols = [
         'avail', 'player', 'AB', 'R', 'H', 'singles',
         'doubles', 'triples', 'HR', 'RBI', 'BB', 'KO',
-        'SB', 'CS', 'AVG', 'OBP', 'SLG', 'rank', 'extra'
+        'SB', 'CS', 'AVG', 'OBP', 'SLG', 'rank'
     ]
+    if len(df.columns) == 19:
+        base_cols = base_cols + ['extra']
+    df.columns = base_cols
     
     # Drop header artifacts and empty rows
     df = df[df['avail'].notna()].copy()
@@ -294,20 +311,25 @@ def load_hitter_standard_period(con, season, period_num):
 def load_all_hitter_standard(season=2025):
     """Load hitter standard stats for all periods in a season."""
     con = get_connection()
-    
+
     con.execute("""
         DELETE FROM hitter_period_stats_standard
         WHERE period_id IN (
             SELECT period_id FROM periods WHERE season = ?
         )
     """, [season])
-    
+
+    max_period = con.execute("""
+        SELECT MAX(period_num) FROM periods WHERE season = ?
+    """, [season]).fetchone()[0]
+
     total = 0
-    for period_num in range(1, 23):
+    for period_num in range(1, max_period + 1):
         rows = load_hitter_standard_period(con, season, period_num)
         print(f"  Period {period_num:>2}: {rows:>5} rows loaded")
         total += rows
-    
+
+    con.commit()
     con.close()
     print(f"\nTotal hitter standard rows loaded: {total}")
 
@@ -327,11 +349,14 @@ def load_pitcher_standard_period(con, season, period_num):
         return 0
     
     df = pd.read_csv(file_path, skiprows=1)
-    df.columns = [
+    base_cols = [
         'avail', 'player', 'INNs', 'APP', 'GS', 'QS', 'CG',
         'W', 'L', 'SV', 'BS', 'HD', 'K', 'BB', 'H',
-        'ERA', 'WHIP', 'rank', 'extra'
+        'ERA', 'WHIP', 'rank'
     ]
+    if len(df.columns) == 19:
+        base_cols = base_cols + ['extra']
+    df.columns = base_cols
     
     # Drop header artifacts and empty rows
     df = df[df['avail'].notna()].copy()
@@ -391,32 +416,40 @@ def load_pitcher_standard_period(con, season, period_num):
 def load_all_pitcher_standard(season=2025):
     """Load pitcher standard stats for all periods in a season."""
     con = get_connection()
-    
+
     con.execute("""
         DELETE FROM pitcher_period_stats_standard
         WHERE period_id IN (
             SELECT period_id FROM periods WHERE season = ?
         )
     """, [season])
-    
+
+    max_period = con.execute("""
+        SELECT MAX(period_num) FROM periods WHERE season = ?
+    """, [season]).fetchone()[0]
+
     total = 0
-    for period_num in range(1, 23):
+    for period_num in range(1, max_period + 1):
         rows = load_pitcher_standard_period(con, season, period_num)
         print(f"  Period {period_num:>2}: {rows:>5} rows loaded")
         total += rows
-    
+
+    con.commit()
     con.close()
     print(f"\nTotal pitcher standard rows loaded: {total}")
 
 if __name__ == "__main__":
-    print("Loading hitter scoring stats for 2025...")
-    load_all_hitter_scores(season=2025)
+    import sys
+    season = int(sys.argv[1]) if len(sys.argv) > 1 else 2025
     
-    print("\nLoading pitcher scoring stats for 2025...")
-    load_all_pitcher_scores(season=2025)
+    print(f"Loading hitter scoring stats for {season}...")
+    load_all_hitter_scores(season=season)
     
-    print("\nLoading hitter standard stats for 2025...")
-    load_all_hitter_standard(season=2025)
+    print(f"\nLoading pitcher scoring stats for {season}...")
+    load_all_pitcher_scores(season=season)
     
-    print("\nLoading pitcher standard stats for 2025...")
-    load_all_pitcher_standard(season=2025)
+    print(f"\nLoading hitter standard stats for {season}...")
+    load_all_hitter_standard(season=season)
+    
+    print(f"\nLoading pitcher standard stats for {season}...")
+    load_all_pitcher_standard(season=season)

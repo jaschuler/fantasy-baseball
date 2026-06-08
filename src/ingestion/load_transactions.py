@@ -21,17 +21,28 @@ def parse_transaction_file(season=2025):
     file_path = (
         Path(__file__).parent.parent.parent
         / "data" / "raw" / str(season)
-        / "2025_Full_Year_Transaction_Report.csv"
+        / f"{season}_Full_Year_Transaction_Report.csv"
     )
+    if not file_path.exists():
+        file_path = (
+            Path(__file__).parent.parent.parent
+            / "data" / "raw" / str(season)
+            / f"{season}_transactions_ytd.csv"
+        )
     
     if not file_path.exists():
         print(f"WARNING: {file_path.name} not found.")
         return 0
 
     # Season date boundaries
-    early_start  = datetime(2025, 3, 17)  # include pre-season adds/trades
-    season_start = datetime(2025, 3, 27)  # actual season start
-    season_end   = datetime(2025, 9, 30)
+    if season == 2026:
+        early_start  = datetime(2025, 12, 1)
+        season_start = datetime(2026, 3, 25)
+        season_end   = datetime(2026, 9, 30)
+    else:
+        early_start  = datetime(season, 3, 17)
+        season_start = datetime(season, 3, 27)
+        season_end   = datetime(season, 9, 30)
 
     con = get_connection()
     con.execute("DELETE FROM transactions WHERE season = ?", [season])
@@ -147,4 +158,6 @@ def parse_transaction_file(season=2025):
 
 
 if __name__ == "__main__":
-    parse_transaction_file(season=2025)
+    import sys
+    season = int(sys.argv[1]) if len(sys.argv) > 1 else 2025
+    parse_transaction_file(season=season)

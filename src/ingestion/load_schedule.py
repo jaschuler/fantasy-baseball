@@ -30,7 +30,15 @@ def load_schedule(season=2025):
         Path(__file__).parent.parent.parent
         / "data" / "raw" / str(season)
         / "schedule_and_results.docx"
-    )
+        )
+    
+    if not doc_path.exists():
+        doc_path = (
+            Path(__file__).parent.parent.parent
+            / "data" / "raw" / str(season)
+            / f"{season}_schedule_results_ytd.docx"
+        )
+    
 
     if not doc_path.exists():
         print(f"WARNING: {doc_path.name} not found.")
@@ -116,4 +124,6 @@ def load_schedule(season=2025):
 
 
 if __name__ == "__main__":
-    load_schedule(season=2025)
+    import sys
+    season = int(sys.argv[1]) if len(sys.argv) > 1 else 2025
+    load_schedule(season=season)
