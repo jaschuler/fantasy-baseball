@@ -386,14 +386,19 @@ def run_valuations(season, period_num=None):
     # ── Summary ───────────────────────────────────────────────────────────
     print(f"\n  Top 10 Hitters ({period_label}):")
     h_display = hitters.sort_values('dollar_value', ascending=False)[
-        ['name_full', 'primary_pos', 'HR', 'SB', 'AVG', 'OPS',
+        ['name_full', 'primary_pos', 'PA', 'HR', 'SB', 'AVG', 'OPS',
+         'RP', 'KO', 'z_AVG', 'z_HR', 'z_KO', 'z_OPS', 'z_RP', 'z_SB',
          'z_total', 'dollar_value']
     ].head(10)
+    pd.set_option('display.max_columns', None)
+    pd.set_option('display.width', 200)
+    pd.set_option('display.float_format', '{:.2f}'.format)
     print(h_display.to_string(index=False))
 
     print(f"\n  Top 10 Pitchers ({period_label}):")
     p_display = pitchers.sort_values('dollar_value', ascending=False)[
-        ['name_full', 'pitcher_role', 'ERA', 'WHIP', 'K', 'QS', 'SV',
+        ['name_full', 'pitcher_role', 'INNs', 'ERA', 'WHIP', 'HRA', 'K',
+         'QS', 'SV', 'z_ERA', 'z_WHIP', 'z_HRA', 'z_K', 'z_QS', 'z_SV',
          'z_total', 'dollar_value']
     ].head(10)
     print(p_display.to_string(index=False))

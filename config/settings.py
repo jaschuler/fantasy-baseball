@@ -1,4 +1,8 @@
 from pathlib import Path
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 # ── Project Root ──────────────────────────────────────────────────────────────
 ROOT_DIR = Path(__file__).parent.parent
@@ -40,3 +44,9 @@ CAT_DISPLAY = {
     "SV":   "Saves",
     "WHIP": "WHIP",
 }
+
+# ── Fangraphs ────────────────────────────────────────────────────────
+FANGRAPHS_USERNAME = os.getenv('FANGRAPHS_USERNAME')
+FANGRAPHS_PASSWORD = os.getenv('FANGRAPHS_PASSWORD')
+FANGRAPHS_COOKIE = os.getenv('FANGRAPHS_COOKIE')
+FANGRAPHS_COOKIE_NAME = 'wordpress_logged_in_0cae6f5cb929d209043cb97f8c2eee44'
