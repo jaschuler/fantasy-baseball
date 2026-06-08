@@ -98,10 +98,11 @@ def load_hitter_score_period(con, season, period_num):
         
         con.execute("""
             INSERT INTO hitter_period_stats_scoring
-                (player_id, period_id, team_id, AVG, HR, KO, OPS, RP, SB, PA)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (player_id, cbs_name_raw, period_id, team_id, AVG, HR, KO, OPS, RP, SB, PA)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, [
-            None,          # player_id — will resolve in MLBAM matching step
+            None,            # player_id — will resolve in MLBAM matching step
+            row['player'],          
             period_id,
             team_id,
             row['AVG'],
@@ -176,10 +177,11 @@ def load_pitcher_score_period(con, season, period_num):
         
         con.execute("""
             INSERT INTO pitcher_period_stats_scoring
-                (player_id, period_id, team_id, ERA, HRA, K, QS, SV, WHIP, INNs)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (player_id, cbs_name_raw, period_id, team_id, ERA, HRA, K, QS, SV, WHIP, INNs)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, [
             None,
+            row['player'],
             period_id,
             team_id,
             row['ERA'],
@@ -258,12 +260,13 @@ def load_hitter_standard_period(con, season, period_num):
         
         con.execute("""
             INSERT INTO hitter_period_stats_standard
-                (player_id, period_id, team_id, mlb_team,
+                (player_id, cbs_name_raw, period_id, team_id, mlb_team,
                  AB, R, H, singles, doubles, triples, HR, RBI,
                  BB, KO, SB, CS, AVG, OBP, SLG)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, [
             None,
+            row['player'],
             period_id,
             team_id,
             mlb_team,
@@ -354,12 +357,13 @@ def load_pitcher_standard_period(con, season, period_num):
         
         con.execute("""
             INSERT INTO pitcher_period_stats_standard
-                (player_id, period_id, team_id, mlb_team,
+                (player_id, cbs_name_raw, period_id, team_id, mlb_team,
                  INNs, APP, GS, QS, CG, W, L, SV, BS, HD,
                  K, BB, H, ERA, WHIP)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, [
             None,
+            row['player'],
             period_id,
             team_id,
             mlb_team,

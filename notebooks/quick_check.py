@@ -112,4 +112,28 @@ print(con.execute("""
     ORDER BY transaction_date
 """).df().head(10))
 
+print("=== CROSSWALK SUMMARY ===")
+print(con.execute("""
+    SELECT
+        player_type,
+        match_method,
+        COUNT(*) as count
+    FROM player_name_crosswalk
+    GROUP BY player_type, match_method
+    ORDER BY player_type, match_method
+""").df())
+
+print("\n=== SAMPLE MATCHED PLAYERS ===")
+print(con.execute("""
+    SELECT 
+        c.cbs_name_raw,
+        c.player_type,
+        p.name_full,
+        c.match_confidence,
+        c.match_method
+    FROM player_name_crosswalk c
+    JOIN players p ON c.player_id = p.player_id
+    ORDER BY c.match_confidence DESC
+""").df().head(20))
+
 # con.close()

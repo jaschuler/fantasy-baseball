@@ -82,6 +82,7 @@ def init_db():
             crosswalk_id     INTEGER PRIMARY KEY DEFAULT nextval('seq_crosswalk'),
             cbs_name_raw     VARCHAR,
             player_id        INTEGER REFERENCES players(player_id),
+            player_type      VARCHAR,
             match_confidence FLOAT,
             match_method     VARCHAR,
             season           INTEGER
@@ -93,6 +94,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS hitter_period_stats_standard (
             id          INTEGER PRIMARY KEY DEFAULT nextval('seq_hitter_standard'),
             player_id   INTEGER REFERENCES players(player_id),
+            cbs_name_raw VARCHAR,
             period_id   INTEGER REFERENCES periods(period_id),
             team_id     INTEGER REFERENCES teams(team_id),
             mlb_team    VARCHAR,
@@ -118,6 +120,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS hitter_period_stats_scoring (
             id          INTEGER PRIMARY KEY DEFAULT nextval('seq_hitter_score'),
             player_id   INTEGER REFERENCES players(player_id),
+            cbs_name_raw VARCHAR,
             period_id   INTEGER REFERENCES periods(period_id),
             team_id     INTEGER REFERENCES teams(team_id),
             AVG         FLOAT,
@@ -134,6 +137,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS pitcher_period_stats_standard (
             id          INTEGER PRIMARY KEY DEFAULT nextval('seq_pitcher_standard'),
             player_id   INTEGER REFERENCES players(player_id),
+            cbs_name_raw VARCHAR,
             period_id   INTEGER REFERENCES periods(period_id),
             team_id     INTEGER REFERENCES teams(team_id),
             mlb_team    VARCHAR,
@@ -159,6 +163,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS pitcher_period_stats_scoring (
             id          INTEGER PRIMARY KEY DEFAULT nextval('seq_pitcher_score'),
             player_id   INTEGER REFERENCES players(player_id),
+            cbs_name_raw VARCHAR,
             period_id   INTEGER REFERENCES periods(period_id),
             team_id     INTEGER REFERENCES teams(team_id),
             ERA         FLOAT,

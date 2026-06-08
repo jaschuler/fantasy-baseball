@@ -122,7 +122,6 @@ def load_scoring_categories():
     print(f"Loaded {len(categories)} scoring categories.")
     con.close()
 
-
 if __name__ == "__main__":
     load_teams()
     load_periods()
