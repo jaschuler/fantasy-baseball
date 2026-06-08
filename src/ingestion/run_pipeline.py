@@ -8,7 +8,7 @@ from src.ingestion.load_period_stats import (
     load_hitter_standard_period,
     load_pitcher_score_period,
     load_pitcher_standard_period,
-    get_period_id,
+    update_pa_and_inns,
 )
 
 
@@ -16,14 +16,12 @@ def run_full_pipeline(season):
     """Load all stat tables for a given season in a single connection."""
     con = get_connection()
 
-    # Get max period for this season
     max_period = con.execute("""
         SELECT MAX(period_num) FROM periods WHERE season = ?
     """, [season]).fetchone()[0]
 
     print(f"\n=== Loading {season} data ({max_period} periods) ===")
 
-    # Clear all four tables for this season
     for table in [
         'hitter_period_stats_scoring',
         'hitter_period_stats_standard',
@@ -38,7 +36,6 @@ def run_full_pipeline(season):
         """, [season])
     print("Cleared existing data.")
 
-    # Load all four tables period by period
     totals = {
         'hitter_score':    0,
         'hitter_standard': 0,
@@ -47,15 +44,31 @@ def run_full_pipeline(season):
     }
 
     for period_num in range(1, max_period + 1):
-        hs = load_hitter_score_period(con, season, period_num)
-        hst = load_hitter_standard_period(con, season, period_num)
-        ps = load_pitcher_score_period(con, season, period_num)
-        pst = load_pitcher_standard_period(con, season, period_num)
+        try:
+            hs  = load_hitter_score_period(con, season, period_num)
+        except Exception as e:
+            print(f"  ERROR hitter_score period {period_num}: {e}")
+            hs = 0
+        try:
+            hst = load_hitter_standard_period(con, season, period_num)
+        except Exception as e:
+            print(f"  ERROR hitter_standard period {period_num}: {e}")
+            hst = 0
+        try:
+            ps  = load_pitcher_score_period(con, season, period_num)
+        except Exception as e:
+            print(f"  ERROR pitcher_score period {period_num}: {e}")
+            ps = 0
+        try:
+            pst = load_pitcher_standard_period(con, season, period_num)
+        except Exception as e:
+            print(f"  ERROR pitcher_standard period {period_num}: {e}")
+            pst = 0
 
-        totals['hitter_score']    += hs
-        totals['hitter_standard'] += hst
-        totals['pitcher_score']   += ps
-        totals['pitcher_standard']+= pst
+        totals['hitter_score']     += hs
+        totals['hitter_standard']  += hst
+        totals['pitcher_score']    += ps
+        totals['pitcher_standard'] += pst
 
         print(f"  Period {period_num:>2}: "
               f"hit_score={hs:>5} "
@@ -63,8 +76,20 @@ def run_full_pipeline(season):
               f"pit_score={ps:>5} "
               f"pit_std={pst:>5}")
 
+    print("\nUpdating PA and INNs...")
+    update_pa_and_inns(con, season)
+
     con.commit()
     con.close()
+
+    print("\nRunning player matching...")
+    from src.ingestion.match_players import match_players, update_player_ids
+    match_players(season=season)
+    update_player_ids(season=season)
+
+    print("\nUpdating player positions...")
+    from src.ingestion.match_players import update_player_positions
+    update_player_positions(season=season)
 
     print(f"\nTotals for {season}:")
     for key, val in totals.items():

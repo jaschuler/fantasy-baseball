@@ -286,6 +286,36 @@ def update_player_ids(season=2025):
 
     con.close()
 
+def update_player_positions(season):
+    """
+    Populate position in players table from CBS name strings in crosswalk.
+    """
+    from src.ingestion.load_period_stats import parse_player_info
+    con = get_connection()
+
+    rows = con.execute("""
+        SELECT DISTINCT player_id, cbs_name_raw
+        FROM player_name_crosswalk
+        WHERE season = ?
+        AND player_id IS NOT NULL
+    """, [season]).fetchall()
+
+    updated = 0
+    for player_id, cbs_name_raw in rows:
+        _, position, _ = parse_player_info(cbs_name_raw)
+        if position:
+            con.execute("""
+                UPDATE players
+                SET position = ?
+                WHERE player_id = ?
+                AND position IS NULL
+            """, [position, player_id])
+            updated += 1
+
+    con.commit()
+    con.close()
+    print(f"  Player positions updated: {updated}")
+
 if __name__ == "__main__":
     match_players(season=2025)
     print("\nUpdating player_id in stat tables...")

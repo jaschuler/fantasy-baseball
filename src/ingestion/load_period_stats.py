@@ -50,10 +50,19 @@ def get_period_id(con, season, period_num):
 
 
 def get_team_id(con, season, last_name_key):
-    """Look up team_id from teams table."""
+    """Look up team_id from teams table by last name key or full team name."""
+    # Try last name key first (2025 format)
     result = con.execute("""
         SELECT team_id FROM teams
         WHERE season = ? AND last_name_key = ?
+    """, [season, last_name_key]).fetchone()
+    if result:
+        return result[0]
+
+    # Try full team name (2026 format)
+    result = con.execute("""
+        SELECT team_id FROM teams
+        WHERE season = ? AND team_name = ?
     """, [season, last_name_key]).fetchone()
     return result[0] if result else None
 
@@ -437,6 +446,68 @@ def load_all_pitcher_standard(season=2025):
     con.commit()
     con.close()
     print(f"\nTotal pitcher standard rows loaded: {total}")
+
+def update_pa_and_inns(con, season):
+    """
+    Populate PA in hitter_period_stats_scoring from standard file.
+    PA = AB + BB (approximation).
+    Populate INNs in pitcher_period_stats_scoring from standard file.
+    """
+    # Update hitter PA — join on period_id and cbs_name_raw only
+    con.execute("""
+        UPDATE hitter_period_stats_scoring AS s
+        SET PA = (
+            SELECT st.AB + st.BB
+            FROM hitter_period_stats_standard st
+            WHERE st.period_id    = s.period_id
+            AND   st.cbs_name_raw = s.cbs_name_raw
+            LIMIT 1
+        )
+        WHERE s.period_id IN (
+            SELECT period_id FROM periods WHERE season = ?
+        )
+        AND s.PA IS NULL
+    """, [season])
+
+    # Update pitcher INNs — join on period_id and cbs_name_raw only
+    con.execute("""
+        UPDATE pitcher_period_stats_scoring AS s
+        SET INNs = (
+            SELECT st.INNs
+            FROM pitcher_period_stats_standard st
+            WHERE st.period_id    = s.period_id
+            AND   st.cbs_name_raw = s.cbs_name_raw
+            LIMIT 1
+        )
+        WHERE s.period_id IN (
+            SELECT period_id FROM periods WHERE season = ?
+        )
+        AND s.INNs IS NULL
+    """, [season])
+
+    con.commit()
+
+    # Verify
+    h_pa = con.execute("""
+        SELECT COUNT(*), SUM(CASE WHEN PA IS NOT NULL THEN 1 END)
+        FROM hitter_period_stats_scoring
+        WHERE period_id IN (
+            SELECT period_id FROM periods WHERE season = ?
+        )
+    """, [season]).fetchone()
+
+    p_inns = con.execute("""
+        SELECT COUNT(*), SUM(CASE WHEN INNs IS NOT NULL THEN 1 END)
+        FROM pitcher_period_stats_scoring
+        WHERE period_id IN (
+            SELECT period_id FROM periods WHERE season = ?
+        )
+    """, [season]).fetchone()
+
+    h_matched = h_pa[1] or 0
+    p_matched  = p_inns[1] or 0
+    print(f"  Hitter PA populated:    {h_matched:,} / {h_pa[0]:,}")
+    print(f"  Pitcher INNs populated: {p_matched:,} / {p_inns[0]:,}")
 
 if __name__ == "__main__":
     import sys
