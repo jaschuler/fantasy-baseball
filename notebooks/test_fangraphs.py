@@ -35,12 +35,24 @@ params_pitch = {
 # # Add this to test_fangraphs.py after the existing code
 import json
 
-print("\nFetching Steamer ROS pitching...")
-response_p = session.get(url_pitch, params=params_pitch)
-print(f"Status: {response_p.status_code}")
-data_p = json.loads(response_p.text)
-print(f"Total pitchers: {len(data_p)}")
-print(f"\nAll columns: {list(data_p[0].keys())}")
+# Test pagination parameters
+for param_set in [
+    {'type': 'ros', 'pos': 'all', 'team': 0, 'players': 0, 'page': 1, 'pagesize': 500},
+    {'type': 'ros', 'pos': 'all', 'team': 0, 'players': 0, 'limit': 500},
+    {'type': 'ros', 'pos': 'all', 'team': 0, 'players': 0, 'offset': 0, 'limit': 500},
+]:
+    r = session.get('https://www.fangraphs.com/api/steamer/batting', params=param_set)
+    data = json.loads(r.text)
+    print(f"Params: {param_set}")
+    print(f"Results: {len(data)}")
+    print()
+
+# print("\nFetching Steamer ROS pitching...")
+# response_p = session.get(url_pitch, params=params_pitch)
+# print(f"Status: {response_p.status_code}")
+# data_p = json.loads(response_p.text)
+# print(f"Total pitchers: {len(data_p)}")
+# print(f"\nAll columns: {list(data_p[0].keys())}")
 
 # print("Fetching Steamer ROS batting...")
 # response = session.get(url, params=params)
